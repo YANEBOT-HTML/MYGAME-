@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SPEAKER | NO HINTS</title>
+    <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at 20% 30%, #0a0c1a, #02010a);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: monospace;
+            padding: 20px;
+        }
+        .game-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        canvas {
+            display: block;
+            border-radius: 28px;
+            box-shadow: 0 0 0 3px #ff3366, 0 0 0 6px #ff0000;
+            background: #010018;
+            width: 100%;
+            max-width: 1000px;
+            aspect-ratio: 1000 / 550;
+        }
+        .info-panel {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+            background: #000000aa;
+            backdrop-filter: blur(10px);
+            padding: 8px 20px;
+            border-radius: 60px;
+        }
+        .info-card {
+            color: #aaffdd;
+            font-size: 0.7rem;
+            background: #0a1022;
+            padding: 4px 14px;
+            border-radius: 30px;
+        }
+        .info-card span {
+            color: #f4ff88;
+            font-weight: bold;
+        }
+        .hp-bar-container {
+            width: 80px;
+            height: 10px;
+            background: #331122;
+            border-radius: 20px;
+            overflow: hidden;
+            display: inline-block;
+            margin-left: 6px;
+        }
+        .hp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff3366, #ff8844);
+            transition: width 0.2s;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        button {
+            background: #24aa7a;
+            border: none;
+            font-family: monospace;
+            font-size: 0.7rem;
+            font-weight: bold;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 40px;
+            cursor: pointer;
+        }
+        .admin-btn {
+            background: #331c44;
+        }
+        .code-input {
+            margin-top: 8px;
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+        }
+        .code-input input {
+            background: #1e1a3f;
+            border: 1px solid #ffaa66;
+            color: #ffdd99;
+            border-radius: 30px;
+            padding: 4px 12px;
+            width: 130px;
+        }
+        .admin-panel {
+            display: none;
+            background: #0a041f;
+            padding: 10px;
+            border-radius: 30px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="game-wrapper">
+    <canvas id="gameCanvas" width="1000" height="550"></canvas>
+    <div class="info-panel">
+        <div class="info-card">🎙️ <span id="coinCount">0</span></div>
+        <div class="info-card">❤️ P1 <span id="hpValue">12</span><div class="hp-bar-container"><div class="hp-fill" id="hpFill"></div></div></div>
+        <div class="info-card">❤️ P2 <span id="hp2Value">12</span><div class="hp-bar-container"><div class="hp-fill" id="hp2Fill"></div></div></div>
+        <div class="info-card">🔫 <span id="laserAmmo">3</span>/3</div>
+        <div class="info-card">💀 <span id="killCount">0</span></div>
+        <div class="info-card">⭐ <span id="realCoins">0</span></div>
+    </div>
+    <div class="controls">
+        <button id="jumpBtn">P1 JUMP (W/↑)</button>
+        <button id="jump2Btn" style="background:#44aa88;">P2 JUMP (T)</button>
+        <button id="attackBtn">P1 LASER (SPACE)</button>
+        <button id="attack2Btn" style="background:#44aa88;">P2 LASER (Y)</button>
+        <button id="reloadBtn">RELOAD (R) -40💎</button>
+        <button id="abilityBtn" style="background:#aa44ff;">🌀 ULT (U)</button>
+        <button id="adminBtn" class="admin-btn">⚙️ ADMIN</button>
+    </div>
+    <div id="adminPanel" class="admin-panel">
+        <input type="text" id="adminLogin" placeholder=" " style="margin:3px; padding:5px; border-radius:30px; width:100px;">
+        <input type="password" id="adminPass" placeholder=" " style="margin:3px; padding:5px; border-radius:30px; width:100px;">
+        <button id="adminAuthBtn">OK</button>
+        <div id="adminCmds" style="display:none; margin-top:8px;">
+            <button id="giveCoins">+500💎</button>
+            <button id="giveHp">❤️ P1 +5</button>
+            <button id="giveHp2">❤️ P2 +5</button>
+            <button id="giveLaser">🔫 FULL</button>
+            <button id="spawnWave">🧟 WAVE</button>
+            <button id="giveRealCoins">⭐ +5 REAL</button>
+        </div>
+    </div>
+    <div class="code-input">
+        <input type="text" id="secretCodeInput" placeholder="ENTER CODE">
+        <button id="activateCodeBtn">ACTIVATE</button>
+    </div>
+</div>
+
+<script>
+(function(){
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let player1 = {
+        x: 140, y: 0, w: 38, h: 44,
+        vx: 0, vy: 0, gravity: 0.75, jumpPower: -9.5,
+        grounded: true, hp: 12, maxHp: 12, invTimer: 0
+    };
+    let player2 = {
+        x: 200, y: 0, w: 38, h: 44,
+        vx: 0, vy: 0, gravity: 0.75, jumpPower: -9.5,
+        grounded: true, hp: 12, maxHp: 12, invTimer: 0,
+        active: true
+    };
+    const groundY = canvas.height - 68;
+    player1.y = groundY - player1.h;
+    player2.y = groundY - player2.h;
+    
+    let coins = 200, realCoins = 0, kills = 0, laserAmmo = 3, ultCharge = 0;
+    let enemies = [], laserActive = false, laserTimer = 0, blood = [];
+    let adminAuth = false;
+    let finalBoss = null, finalBossSpawned = false;
+    
+    let playerId = localStorage.getItem('sh_id');
+    if(!playerId) playerId = 'HERO_' + Math.floor(Math.random()*9999);
+    
+    function save(){
+        localStorage.setItem(`sh_${playerId}`, JSON.stringify({
+            coins, realCoins, kills, hp1: player1.hp, hp2: player2.hp
+        }));
+    }
+    
+    function load(){
+        let d = localStorage.getItem(`sh_${playerId}`);
+        if(d){
+            let data = JSON.parse(d);
+            coins = data.coins ?? 200;
+            realCoins = data.realCoins ?? 0;
+            kills = data.kills ?? 0;
+            player1.hp = data.hp1 ?? 12;
+            player2.hp = data.hp2 ?? 12;
+        }
+        player1.hp = Math.min(player1.maxHp, Math.max(0, player1.hp));
+        player2.hp = Math.min(player2.maxHp, Math.max(0, player2.hp));
+        updateUI();
+    }
+    
+    function updateUI(){
+        document.getElementById('coinCount').innerText = coins;
+        document.getElementById('laserAmmo').innerText = laserAmmo;
+        document.getElementById('killCount').innerText = kills;
+        document.getElementById('realCoins').innerText = realCoins;
+        document.getElementById('hpValue').innerText = player1.hp;
+        document.getElementById('hp2Value').innerText = player2.hp;
+        document.getElementById('hpFill').style.width = (player1.hp/player1.maxHp)*100 + '%';
+        document.getElementById('hp2Fill').style.width = (player2.hp/player2.maxHp)*100 + '%';
+    }
+    
+    function showMsg(t){
+        let d = document.createElement('div');
+        d.innerText = t;
+        d.style.position='fixed'; d.style.bottom='20%'; d.style.left='50%';
+        d.style.transform='translateX(-50%)'; d.style.background='#000'; d.style.padding='6px 18px';
+        d.style.borderRadius='30px'; d.style.color='#ffcc88'; d.style.zIndex=999;
+        document.body.appendChild(d);
+        setTimeout(()=>d.remove(),1800);
+    }
+    
+    function spawnEnemy(){
+        let side = Math.random()<0.5 ? -1 : 1;
+        let x = side===-1 ? -35 : canvas.width+35;
+        let speed = (1.1+Math.random()*1.3)*(side===-1?1:-1);
+        enemies.push({ x:x, y:groundY-42, w:32, h:42, hp:1, speed:speed, atkCd:0 });
+    }
+    
+    function updateEnemies(){
+        for(let i=0;i<enemies.length;i++){
+            let e=enemies[i];
+            e.x += e.speed;
+            if(e.atkCd>0) e.atkCd--;
+            if(player1.invTimer===0 && e.atkCd===0 &&
+               player1.x<e.x+e.w && player1.x+player1.w>e.x &&
+               player1.y<e.y+e.h && player1.y+player1.h>e.y){
+                player1.hp = Math.max(0, player1.hp-1);
+                player1.invTimer=20;
+                e.atkCd=40;
+                updateUI();
+                if(player1.hp<=0) showMsg('💀 P1 DIED');
+            }
+            if(player2.active && player2.invTimer===0 && e.atkCd===0 &&
+               player2.x<e.x+e.w && player2.x+player2.w>e.x &&
+               player2.y<e.y+e.h && player2.y+player2.h>e.y){
+                player2.hp = Math.max(0, player2.hp-1);
+                player2.invTimer=20;
+                e.atkCd=40;
+                updateUI();
+                if(player2.hp<=0) showMsg('💀 P2 DIED');
+            }
+            if(e.x+e.w<-150 || e.x>canvas.width+150){
+                enemies.splice(i,1);
+                i--;
+            }
+        }
+    }
+    
+    function fireLaser(){
+        if(laserAmmo<=0){ showMsg('⛔ NO AMMO'); return; }
+        laserActive=true; laserTimer=8; laserAmmo--;
+        let hit=0;
+        for(let i=0;i<enemies.length;i++){
+            let e=enemies[i];
+            if(e.y+e.h/2 > player1.y+8 && e.y+e.h/2 < player1.y+player1.h){
+                e.hp--;
+                if(e.hp<=0){
+                    kills++; coins += 15;
+                    if(Math.random()<0.1){ realCoins++; showMsg('⭐ REAL DROP!'); }
+                    enemies.splice(i,1); i--; hit++;
+                    ultCharge = Math.min(100, ultCharge+10);
+                }
+            }
+        }
+        if(finalBoss){
+            finalBoss.hp -= 3;
+            if(finalBoss.hp<=0){
+                showMsg('🎉 BOSS DEFEATED! +500💎 +5⭐');
+                coins += 500;
+                realCoins += 5;
+                finalBoss = null;
+                finalBossSpawned = false;
+            }
+        }
+        if(hit>0) showMsg(`🔥 +${hit*15}`);
+        save(); updateUI();
+    }
+    
+    function reloadLaser(){
+        if(coins >= 40 && laserAmmo < 3){
+            coins -= 40;
+            laserAmmo = 3;
+            showMsg('🔋 RELOAD');
+            save(); updateUI();
+        } else {
+            showMsg('💰 NEED 40 COINS');
+        }
+    }
+    
+    function useUltimate(){
+        if(ultCharge < 100){ showMsg(`🌀 NEED ${100-ultCharge}%`); return; }
+        ultCharge = 0;
+        for(let e of enemies) e.hp = 0;
+        enemies = enemies.filter(e=>e.hp>0);
+        if(finalBoss) finalBoss.hp -= 30;
+        showMsg('🌀 ULTIMATE');
+        save(); updateUI();
+    }
+    
+    function spawnFinalBoss(){
+        if(finalBossSpawned) return;
+        if(kills >= 25){
+            finalBossSpawned = true;
+            finalBoss = {
+                x: canvas.width/2-50, y: groundY-80, w:100, h:80,
+                hp: 150, maxHp: 150, name: '💀 FINAL BOSS', atkCd: 0
+            };
+            showMsg('⚠️ FINAL BOSS APPEARED!', '#ff4444');
+        }
+    }
+    
+    function updateBoss(){
+        if(!finalBoss) return;
+        if(finalBoss.atkCd <=0){
+            player1.hp = Math.max(0, player1.hp-2);
+            if(player2.active) player2.hp = Math.max(0, player2.hp-2);
+            finalBoss.atkCd = 45;
+            updateUI();
+            if(player1.hp<=0) showMsg('💀 P1 DIED');
+            if(player2.hp<=0) showMsg('💀 P2 DIED');
+        } else {
+            finalBoss.atkCd--;
+        }
+    }
+    
+    let keys1 = { KeyW:false, KeyA:false, KeyD:false, ArrowUp:false, ArrowLeft:false, ArrowRight:false };
+    let keys2 = { KeyT:false, KeyF:false, KeyH:false, KeyG:false };
+    
+    function updatePlayer(p, keys, isP2){
+        let move=0;
+        if(keys.KeyA || keys.ArrowLeft) move=-1;
+        if(keys.KeyD || keys.ArrowRight) move=1;
+        p.vx = move * 4.2;
+        p.x += p.vx;
+        p.x = Math.max(15, Math.min(canvas.width-p.w-15, p.x));
+        let jumpKey = isP2 ? keys.KeyT : (keys.KeyW || keys.ArrowUp);
+        if(jumpKey && p.grounded){
+            p.vy = p.jumpPower;
+            p.grounded = false;
+        }
+        p.vy += p.gravity;
+        p.y += p.vy;
+        if(p.y + p.h >= groundY){
+            p.y = groundY - p.h;
+            p.vy = 0;
+            p.grounded = true;
+        }
+        if(p.y < 0) p.y = 0;
+        if(p.invTimer > 0) p.invTimer--;
+    }
+    
+    let spawnDelay=0;
+    function updateGame(){
+        if(laserActive){ laserTimer--; if(laserTimer<=0) laserActive=false; }
+        updatePlayer(player1, keys1, false);
+        if(player2.active) updatePlayer(player2, keys2, true);
+        updateEnemies();
+        if(finalBoss) updateBoss();
+        spawnDelay++;
+        if(!finalBoss && spawnDelay >= 50){
+            spawnDelay=0;
+            spawnEnemy();
+            if(kills>5 && Math.random()<0.3) spawnEnemy();
+        }
+        spawnFinalBoss();
+        if(ultCharge < 100) ultCharge = Math.min(100, ultCharge+0.15);
+        blood = blood.filter(b=>--b.life>0);
+    }
+    
+    function draw(){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle='#030218'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle='#1b5540'; ctx.fillRect(0,groundY,canvas.width,canvas.height-groundY+5);
+        for(let e of enemies){
+            ctx.fillStyle='#772233'; ctx.fillRect(e.x,e.y,e.w,e.h);
+            ctx.fillStyle='#ff5577'; ctx.fillRect(e.x+6,e.y-8,8,12);
+            ctx.fillStyle='white'; ctx.fillRect(e.x+22,e.y+10,6,6); ctx.fillRect(e.x+6,e.y+10,6,6);
+            ctx.fillStyle='black'; ctx.fillRect(e.x+23,e.y+11,3,4); ctx.fillRect(e.x+7,e.y+11,3,4);
+        }
+        if(finalBoss){
+            ctx.fillStyle='#aa0000'; ctx.fillRect(finalBoss.x, finalBoss.y, finalBoss.w, finalBoss.h);
+            ctx.fillStyle='#ffffff'; ctx.font='bold 14px monospace'; ctx.fillText(finalBoss.name, finalBoss.x+10, finalBoss.y-5);
+            ctx.fillStyle='#ff6666'; ctx.fillRect(finalBoss.x, finalBoss.y-10, (finalBoss.hp/finalBoss.maxHp)*finalBoss.w, 6);
+        }
+        ctx.fillStyle = player1.invTimer%6<3 ? '#ffaaaa' : '#34e0b0';
+        ctx.fillRect(player1.x,player1.y,player1.w,player1.h);
+        ctx.fillStyle='#fffcdd'; ctx.fillRect(player1.x+28,player1.y+12,8,8); ctx.fillRect(player1.x+6,player1.y+12,8,8);
+        if(player2.active){
+            ctx.fillStyle = player2.invTimer%6<3 ? '#ffaaaa' : '#88ff44';
+            ctx.fillRect(player2.x,player2.y,player2.w,player2.h);
+            ctx.fillStyle='#fffcdd'; ctx.fillRect(player2.x+28,player2.y+12,8,8); ctx.fillRect(player2.x+6,player2.y+12,8,8);
+        }
+        if(laserActive){
+            ctx.beginPath(); ctx.strokeStyle='#ff4488'; ctx.lineWidth=12;
+            ctx.moveTo(player1.x+player1.w-10, player1.y+player1.h/2);
+            ctx.lineTo(canvas.width, player1.y+player1.h/2); ctx.stroke();
+        }
+        ctx.font='bold 18px monospace'; ctx.fillStyle='#ffdd88';
+        ctx.fillText('🔊'+coins, canvas.width-100, 45);
+        ctx.fillStyle='#aa88ff'; ctx.fillText(`🌀 ${Math.floor(ultCharge)}%`, canvas.width-100, 80);
+    }
+    
+    // ========== УПРАВЛЕНИЕ ==========
+    window.addEventListener('keydown', (e)=>{
+        let c=e.code;
+        if(keys1.hasOwnProperty(c)) keys1[c]=true;
+        if(keys2.hasOwnProperty(c)) keys2[c]=true;
+        if(c==='Space'){ e.preventDefault(); fireLaser(); }
+        if(c==='KeyY'){ e.preventDefault(); if(player2.active) fireLaser(); }
+        if(c==='KeyR'){ e.preventDefault(); reloadLaser(); }
+        if(c==='KeyU'){ e.preventDefault(); useUltimate(); }
+    });
+    window.addEventListener('keyup', (e)=>{
+        if(keys1.hasOwnProperty(e.code)) keys1[e.code]=false;
+        if(keys2.hasOwnProperty(e.code)) keys2[e.code]=false;
+    });
+    
+    document.getElementById('jumpBtn').onclick = () => { if(player1.grounded){ player1.vy=-9.5; player1.grounded=false; } };
+    document.getElementById('jump2Btn').onclick = () => { if(player2.grounded && player2.active){ player2.vy=-9.5; player2.grounded=false; } };
+    document.getElementById('attackBtn').onclick = () => fireLaser();
+    document.getElementById('attack2Btn').onclick = () => { if(player2.active) fireLaser(); };
+    document.getElementById('reloadBtn').onclick = () => reloadLaser();
+    document.getElementById('abilityBtn').onclick = () => useUltimate();
+    
+    // АДМИНКА
+    document.getElementById('adminBtn').onclick = () => {
+        let panel = document.getElementById('adminPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    };
+    document.getElementById('adminAuthBtn').onclick = () => {
+        let l = document.getElementById('adminLogin').value;
+        let p = document.getElementById('adminPass').value;
+        if(l === 'eblan' && p === 'aboba123'){
+            adminAuth = true;
+            document.getElementById('adminCmds').style.display = 'block';
+            showMsg('✅ ADMIN MODE');
+        } else {
+            showMsg('❌ ACCESS DENIED');
+        }
+    };
+    document.getElementById('giveCoins').onclick = () => { if(adminAuth){ coins+=500; save(); updateUI(); showMsg('+500💎'); } };
+    document.getElementById('giveHp').onclick = () => { if(adminAuth){ player1.hp = Math.min(player1.maxHp, player1.hp+5); updateUI(); save(); } };
+    document.getElementById('giveHp2').onclick = () => { if(adminAuth){ player2.hp = Math.min(player2.maxHp, player2.hp+5); updateUI(); save(); } };
+    document.getElementById('giveLaser').onclick = () => { if(adminAuth){ laserAmmo=3; updateUI(); save(); } };
+    document.getElementById('spawnWave').onclick = () => { if(adminAuth){ for(let i=0;i<3;i++) spawnEnemy(); } };
+    document.getElementById('giveRealCoins').onclick = () => { if(adminAuth){ realCoins+=5; updateUI(); save(); showMsg('⭐ +5 REAL'); } };
+    
+    document.getElementById('activateCodeBtn').onclick = () => {
+        let code = document.getElementById('secretCodeInput').value.trim().toUpperCase();
+        let codes = JSON.parse(localStorage.getItem('sh_codes') || '{"DEMO":{"reward":"coins","value":100}}');
+        let c = codes[code];
+        if(!c){ showMsg('❌ INVALID'); return; }
+        if(c.reward === 'coins'){ coins += c.value; showMsg(`💰 +${c.value} COINS`); }
+        else if(c.reward === 'real'){ realCoins += c.value; showMsg(`⭐ +${c.value} REAL`); }
+        else if(c.reward === 'ult'){ ultCharge = 100; showMsg(`🌀 ULT`); }
+        save(); updateUI();
+        document.getElementById('secretCodeInput').value = '';
+    };
+    
+    load();
+    for(let i=0;i<2;i++) spawnEnemy();
+    function anim(){ updateGame(); draw(); requestAnimationFrame(anim); }
+    anim();
+})();
+</script>
+</body>
+          </html>
